@@ -4,11 +4,14 @@
 int main(void) {
   char *content = read_text_from_file("./test/corpus/simple.hmm");
 
-  Tree *t = tree_load_from_text(content);
+  Arena *a = malloc(sizeof(Arena));
+  arena_init(a);
+  tree_load_to_arena(a, content);
 
-  tree_layout(t);
-  tree_print(t);
+  tree_layout(a->root);
+  tree_print(a->root);
 
-  tree_free(t);
+  arena_free(a);
+
   return EXIT_SUCCESS;
 }
