@@ -1,0 +1,5 @@
+tidy-tree
+
+.cache/
+compile_commands.json
+tidy-trees.pdf
