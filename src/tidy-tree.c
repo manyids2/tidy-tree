@@ -55,28 +55,27 @@ void arena_shrink_to_len(Arena *a) {
 
 int arena_can_insert(Arena *a) { return (a->len < a->capacity); }
 
-IYL *IYL_new(double lowY, int index, IYL *nxt) {
-  IYL *ih = malloc(sizeof(IYL));
+void iyl_new(IYL *ih, double lowY, int index, IYL *nxt) {
   ih->lowY = lowY;
   ih->index = index;
   ih->nxt = nxt;
-  return ih;
 }
 
-void IYL_free(IYL *ih) {
+void iyl_free(IYL *ih) {
   if (ih) {
     free(ih);
   }
 }
 
-void IYL_update(double minY, int i, IYL *ih, IYL *out) {
+void iyl_update(double minY, int i, IYL *ih, IYL *out) {
   while ((ih != NULL) && (minY >= ih->lowY)) {
     ih = ih->nxt;
   }
-  out = IYL_new(minY, i, ih);
+  iyl_new(out, minY, i, ih);
 }
 
-void tree_new(Tree *t, double w, double h, double y, char *line, int index) {
+void tree_new(Tree *t, double w, double h, double y, char *line, int index,
+              u64 sb, u64 eb) {
   t->w = w;
   t->h = h;
   t->y = y;
@@ -96,11 +95,13 @@ void tree_new(Tree *t, double w, double h, double y, char *line, int index) {
   t->mser = 0;
 
   // User data
-  t->line = line;
+  t->sb = sb;
+  t->eb = eb;
   t->index = index;
 }
 
-void tree_print(Tree *t) {
+void tree_print(Tree *t, char *content) {
+  char *line = s_get_substring(content, t->sb, t->eb);
   printf("%s: \n"
          "     x,      y: %3.0f, %3.0f\n"
          "     w,      h: %3.0f, %3.0f\n"
@@ -110,8 +111,9 @@ void tree_print(Tree *t) {
          "  msel,   mser: %3.0f, %3.0f\n"
          "    tl,     tr: %p, %p\n"
          "    el,     er: %p, %p\n",
-         t->line, t->x, t->y, t->w, t->h, t->cs, t->c, t->prelim, t->mod,
-         t->shift, t->change, t->msel, t->mser, t->tl, t->tr, t->el, t->er);
+         line, t->x, t->y, t->w, t->h, t->cs, t->c, t->prelim, t->mod, t->shift,
+         t->change, t->msel, t->mser, t->tl, t->tr, t->el, t->er);
+  free(line);
 }
 
 void tree_free(Tree *t) {
@@ -184,102 +186,21 @@ long read_size_from_file(char *path) {
   return size;
 }
 
-char *read_text_from_file(char *path) {
-  // First open and read size
+void arena_load_content(Arena *a, char *path) {
   long size = read_size_from_file(path);
+  a->nbytes = size;
 
   FILE *fp;
-  char *content;
   fp = fopen(path, "r");
-  content = (char *)memset(malloc(size), '\0', size);
-  fread(content, 1, size - 1, fp);
+  a->content = (char *)memset(malloc(size), '\0', size);
+  fread(a->content, 1, size - 1, fp);
   fclose(fp);
-  return content;
 }
 
-// Algo only works for 'well-formed' trees,
-// i.e. we are only allowed to move one indent up at a time
-// Therefore, each indent level < max_indent has at least one node
-Tree *tree_load_from_text(char *content) {
-  // Parse by lines
-  const char *line_delim = "\n";
-  char *rest;
-
-  // Root
-  Tree *root = malloc(sizeof(Tree));
-  tree_new(root, 0, 0, -1, "root", -1); // Set indent and index to -1
-
-  // First put them all in a list so
-  // we can malloc properly, that way
-  // we can stream lines and maybe even
-  // parallelize
-
-  // Assume 16 nodes to start with
-  int INITIAL_NODES = 16;
-  Tree **nodes = malloc(sizeof(Tree *) * INITIAL_NODES);
-  int capacity = INITIAL_NODES;
-
-  int indent;
-  int count = 0;
-  int max_indent = 0;
-  char *line = strtok_r(content, line_delim, &rest);
-  while (line != NULL) {
-    if (count > capacity) {
-      // printf("count (%d) > capacity (%d) : realloc\n", count, capacity);
-      capacity *= 2;
-      nodes = realloc(nodes, sizeof(Tree *) * capacity);
-      if (!(nodes)) {
-        die("Could not realloc\n");
-      }
-    }
-    indent = s_get_indent(line);
-    if (indent > max_indent) {
-      max_indent = indent;
-    }
-    // TODO: We are allocating here :( Old pattern with malloc outside was
-    // better
-    nodes[count] = malloc(sizeof(Tree));
-    tree_new(nodes[count], strlen(line), 1, indent, line, count);
-    line = strtok_r(NULL, line_delim, &rest);
-    count++;
-  }
-  printf("count: %d, max_indent: %d\n", count, max_indent);
-
-  // Realloc down
-  nodes = realloc(nodes, sizeof(Tree *) * count);
-
-  // Put into tree structure
-  Tree **indent_last = malloc(sizeof(Tree *) * (max_indent + 1));
-  for (int i = 0; i < count; i++) {
-    // This is the last seen node at current index
-    indent_last[(int)nodes[i]->y] = nodes[i];
-    // Attach to parent if indent > 1
-    if (nodes[i]->y == 0) {
-      continue;
-    }
-
-    // Attach to parent if indent > 1
-    Tree *p = indent_last[(int)nodes[i]->y - 1];
-    p->cs += 1;
-    p->c = realloc(p->c, sizeof(Tree *) * p->cs);
-    p->c[p->cs - 1] = nodes[i];
-  }
-  free(indent_last);
-
-  // // Check by seeing number of children
-  // for (int i = 0; i < count; i++) {
-  //   printf("%d : %s\n", nodes[i]->cs, nodes[i]->line);
-  // }
-
-  // Free pointers to nodes
-  free(nodes);
-
-  return root;
-}
-
-void tree_load_to_arena(Arena *a, char *content) {
+void arena_parse_content(Arena *a) {
   // Set the root
-  tree_new(a->root, 0, 0, -1, "root", -1); // Set indent and index to -1
+  tree_new(a->root, 0, 0, -1, "root", -1, 0,
+           a->nbytes); // Set indent and index to -1
 
   // Iterate over lines, only allocate on overflow
   const char *line_delim = "\n";
@@ -287,7 +208,9 @@ void tree_load_to_arena(Arena *a, char *content) {
   int indent;
   int count = 0;
   int max_indent = 0;
-  char *line = strtok_r(content, line_delim, &rest);
+  u64 sb = 0;
+  u64 eb = 0;
+  char *line = strtok_r(a->content, line_delim, &rest);
   while (line != NULL) {
     if (!arena_can_insert(a)) {
       arena_double_capacity(a);
@@ -296,13 +219,18 @@ void tree_load_to_arena(Arena *a, char *content) {
     if (indent > max_indent) {
       max_indent = indent;
     }
-    tree_new(a->nodes[count], strlen(line), 1, indent, line, count);
+    eb = sb + strlen(line); // Swapping \0 for \n, so count works out hopefully
+    tree_new(a->nodes[count], strlen(line), 1, indent, line, count, sb + indent,
+             eb);
+    sb = eb + 1;
     line = strtok_r(NULL, line_delim, &rest);
     count++;
     a->len = count;
   }
+  a->max_indent = max_indent;
+
+  // Reset arena size to free excess
   arena_shrink_to_len(a);
-  printf("count: %d, max_indent: %d\n", count, max_indent);
 
   // Put into tree structure
   Tree **indent_last = malloc(sizeof(Tree *) * (max_indent + 1));
@@ -323,9 +251,18 @@ void tree_load_to_arena(Arena *a, char *content) {
     a->nodes[i]->p = p;
   }
   free(indent_last);
+}
 
-  // // Check by seeing number of children
-  // for (int i = 0; i < a->len; i++) {
-  //   printf("%3d : %s\n", a->nodes[i]->cs, a->nodes[i]->line);
-  // }
+void arena_print(Arena *a) {
+  printf("len: %d, capacity: %d, max_indent: %d, nbytes: %ld\n", a->len,
+         a->capacity, a->max_indent, a->nbytes);
+  printf("|-----|-----|-----|-------|-------|---------\n");
+  printf("|  i  |  y  |  cs |   sb  |   eb  | content \n");
+  printf("|-----|-----|-----|-------|-------|---------\n");
+  for (int i = 0; i < a->len; i++) {
+    char *l = s_get_substring(a->content, a->nodes[i]->sb, a->nodes[i]->eb);
+    printf("| %3d | %3.0f | %3d | %5ld | %5ld | %s \n", i, a->nodes[i]->y,
+           a->nodes[i]->cs, a->nodes[i]->sb, a->nodes[i]->eb, l);
+    free(l);
+  }
 }

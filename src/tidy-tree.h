@@ -1,28 +1,8 @@
+#include "constants.h"
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
-
-typedef uint8_t u8;
-typedef int32_t b32;
-typedef int32_t i32;
-typedef uint32_t u32;
-typedef uint64_t u64;
-typedef float f32;
-typedef double f64;
-typedef uintptr_t uptr;
-typedef char byte;
-
-#define MIN(a, b) (((a) < (b)) ? (a) : (b))
-#define MAX(a, b) (((a) > (b)) ? (a) : (b))
-#define INIT_CAPACITY 16
-
-// Utility macros
-#define die(msg)                                                               \
-  do {                                                                         \
-    perror(msg);                                                               \
-    exit(EXIT_FAILURE);                                                        \
-  } while (0)
 
 // Declare types at start
 typedef struct Arena Arena;
@@ -31,23 +11,35 @@ typedef struct Tree Tree;
 
 // Holds data
 struct Arena {
+  // Basics
   u32 len, capacity;
   Tree *root;
   Tree **nodes;
+
+  // Pointer to content
+  char *content;
+  u64 nbytes;
+
+  // Various state variables
+  u32 max_indent;
 };
 void arena_init(Arena *a);
 void arena_free(Arena *a);
+void arena_print(Arena *a);
 Tree *arena_node_at_index(Arena *a, int i);
 void arena_double_capacity(Arena *a);
 void arena_shrink_to_len(Arena *a);
 int arena_can_insert(Arena *a);
+
+void arena_load_content(Arena *a, char *path);
+void arena_parse_content(Arena *a);
 
 struct IYL {
   f64 lowY;
   int index;
   IYL *nxt;
 };
-IYL *IYL_new(f64 lowY, int index, IYL *nxt);
+void IYL_new(IYL *ih, double lowY, int index, IYL *nxt);
 void IYL_free(IYL *ih);
 void IYL_update(f64 minY, int i, IYL *ih, IYL *out);
 
@@ -60,14 +52,15 @@ struct Tree {
   Tree *p;        // Parent
   Tree **c;       // Array of children and number of children
   int cs;
-  char *line; // Should actually be start and end byte into content
-  int index;
+  int index;  // Line number
+  u64 sb, eb; // Start byte, end byte
 };
 
-void tree_new(Tree *t, double w, double h, double y, char *line, int index);
+void tree_new(Tree *t, double w, double h, double y, char *line, int index,
+              u64 sb, u64 eb);
 void tree_set_children(Tree **c, int cs);
 void tree_free(Tree *t);
-void tree_print(Tree *t);
+void tree_print(Tree *t, char *content);
 
 void tree_layout(Tree *t);
 void tree_first_walk(Tree *t);
@@ -83,7 +76,3 @@ void tree_position_root(Tree *t);
 void tree_second_walk(Tree *t, f64 modsum);
 void tree_distribute_extra(Tree *t, int i, int si, f64 dist);
 void tree_add_child_spacing(Tree *t);
-
-char *read_text_from_file(char *path);
-Tree *tree_load_from_text(char *content);
-void tree_load_to_arena(Arena *a, char *content);
