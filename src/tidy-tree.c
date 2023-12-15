@@ -74,8 +74,8 @@ void iyl_update(double minY, int i, IYL *ih, IYL *out) {
   iyl_new(out, minY, i, ih);
 }
 
-void tree_new(Tree *t, double w, double h, double y, char *line, int index,
-              u64 sb, u64 eb) {
+void tree_new(Tree *t, double w, double h, double y, int index, u64 sb,
+              u64 eb) {
   t->w = w;
   t->h = h;
   t->y = y;
@@ -199,8 +199,10 @@ void arena_load_content(Arena *a, char *path) {
 
 void arena_parse_content(Arena *a) {
   // Set the root
-  tree_new(a->root, 0, 0, -1, "root", -1, 0,
-           a->nbytes); // Set indent and index to -1
+  //   w,     h =  0
+  //   y, index = -1
+  //  sb,    eb =  0
+  tree_new(a->root, 0, 0, -1, -1, 0, 0);
 
   // Iterate over lines, only allocate on overflow
   const char *line_delim = "\n";
@@ -220,8 +222,7 @@ void arena_parse_content(Arena *a) {
       max_indent = indent;
     }
     eb = sb + strlen(line); // Swapping \0 for \n, so count works out hopefully
-    tree_new(a->nodes[count], strlen(line), 1, indent, line, count, sb + indent,
-             eb);
+    tree_new(a->nodes[count], strlen(line), 1, indent, count, sb + indent, eb);
     sb = eb + 1;
     line = strtok_r(NULL, line_delim, &rest);
     count++;
@@ -239,12 +240,14 @@ void arena_parse_content(Arena *a) {
     indent_last[(int)a->nodes[i]->y] = a->nodes[i];
 
     // Ignore if indent == 0 ( no parents )
+    Tree *p;
     if (a->nodes[i]->y == 0) {
-      continue;
+      p = a->root;
+    } else {
+      p = indent_last[(int)a->nodes[i]->y - 1];
     }
 
-    // Attach to parent if indent > 1
-    Tree *p = indent_last[(int)a->nodes[i]->y - 1];
+    // Update parent props and link child to parent
     p->cs += 1;
     p->c = realloc(p->c, sizeof(Tree *) * p->cs);
     p->c[p->cs - 1] = a->nodes[i];
@@ -259,6 +262,8 @@ void arena_print(Arena *a) {
   printf("|-----|-----|-----|-------|-------|---------\n");
   printf("|  i  |  y  |  cs |   sb  |   eb  | content \n");
   printf("|-----|-----|-----|-------|-------|---------\n");
+  printf("| %3d | %3.0f | %3d | %5ld | %5ld | %s \n", -1, a->root->y,
+         a->root->cs, a->root->sb, a->root->eb, "root");
   for (int i = 0; i < a->len; i++) {
     char *l = s_get_substring(a->content, a->nodes[i]->sb, a->nodes[i]->eb);
     printf("| %3d | %3.0f | %3d | %5ld | %5ld | %s \n", i, a->nodes[i]->y,

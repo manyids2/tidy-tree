@@ -56,8 +56,9 @@ struct Tree {
   u64 sb, eb; // Start byte, end byte
 };
 
-void tree_new(Tree *t, double w, double h, double y, char *line, int index,
-              u64 sb, u64 eb);
+// Initialize new tree with no children,
+//
+void tree_new(Tree *t, double w, double h, double y, int index, u64 sb, u64 eb);
 void tree_set_children(Tree **c, int cs);
 void tree_free(Tree *t);
 void tree_print(Tree *t, char *content);
