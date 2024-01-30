@@ -372,17 +372,53 @@ void arena_parse_content(Arena *a) {
 }
 
 void arena_print(Arena *a) {
+  int max_y = 0;
   printf("len: %d, capacity: %d, max_indent: %d, nbytes: %ld\n", a->len,
          a->capacity, a->max_indent, a->nbytes);
-  printf("|-----|-----|-----|-------|-------|---------\n");
-  printf("|  i  |  y  |  cs |   sb  |   eb  | content \n");
-  printf("|-----|-----|-----|-------|-------|---------\n");
-  printf("| %3d | %3.0f | %3d | %5ld | %5ld | %s \n", -1, a->root->y,
-         a->root->cs, a->root->sb, a->root->eb, "root");
+  printf("|-----|-----|-----|-----|-------|-------|---------\n");
+  printf("|  i  |  y  |  x  |  cs |   sb  |   eb  | content \n");
+  printf("|-----|-----|-----|-----|-------|-------|---------\n");
+  printf("| %3d | %3.0f | %3.0f | %3d | %5ld | %5ld | %s \n", -1, a->root->y,
+         a->root->x, a->root->cs, a->root->sb, a->root->eb, "root");
   for (int i = 0; i < a->len; i++) {
     char *l = s_get_substring(a->content, a->nodes[i]->sb, a->nodes[i]->eb);
-    printf("| %3d | %3.0f | %3d | %5ld | %5ld | %s \n", i, a->nodes[i]->y,
-           a->nodes[i]->cs, a->nodes[i]->sb, a->nodes[i]->eb, l);
+    printf("| %3d | %3.0f | %3.0f | %3d | %5ld | %5ld | %s \n", i,
+           a->nodes[i]->y, a->nodes[i]->x, a->nodes[i]->cs, a->nodes[i]->sb,
+           a->nodes[i]->eb, l);
+    if (max_y < a->nodes[i]->y) {
+      max_y = a->nodes[i]->y;
+    }
     free(l);
+  }
+
+  // Draw it onto a buffer
+  int rows = max_y + 1; // 1 index
+  int cols = 50;
+  char *buffer = malloc(sizeof(char) * rows * cols);
+  for (int i = 0; i < cols; i++) {
+    for (int j = 0; j < rows; j++) {
+      int idx = j * cols + i;
+      buffer[idx] = " "[0];
+    }
+  }
+
+  for (int i = 0; i < a->len; i++) {
+    char *l = s_get_substring(a->content, a->nodes[i]->sb, a->nodes[i]->eb);
+    for (int j = 0; j < strlen(l); j++) {
+      int idx = a->nodes[i]->y * cols + a->nodes[i]->x + j;
+      if (idx < rows * cols) {
+        buffer[idx] = l[j];
+      }
+    }
+    free(l);
+  }
+
+  printf("\n");
+  for (int j = 0; j < rows; j++) {
+    for (int i = 0; i < cols; i++) {
+      int idx = j * cols + i;
+      printf("%c", buffer[idx]);
+    }
+    printf("\n");
   }
 }

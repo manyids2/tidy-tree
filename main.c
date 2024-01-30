@@ -7,6 +7,7 @@ int main(void) {
   arena_init(a);
   arena_load_content(a, path);
   arena_parse_content(a);
+  tree_layout(a->root);
   arena_print(a);
   arena_free(a);
   return EXIT_SUCCESS;
